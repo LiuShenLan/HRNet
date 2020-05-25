@@ -12,6 +12,7 @@ from __future__ import print_function
 import logging
 import os
 import time
+import ipdb
 
 from utils.utils import AverageMeter
 from utils.vis import save_debug_images
@@ -28,6 +29,10 @@ def do_train(cfg, model, data_loader, loss_factory, optimizer, epoch,
     push_loss_meter = [AverageMeter() for _ in range(cfg.LOSS.NUM_STAGES)]
     pull_loss_meter = [AverageMeter() for _ in range(cfg.LOSS.NUM_STAGES)]
 
+    # print(heatmaps_loss_meter)
+    # print(push_loss_meter)
+    # print(pull_loss_meter)
+    # import ipdb; ipdb.set_trace()
     # switch to train mode
     model.train()
 

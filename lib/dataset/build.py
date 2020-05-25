@@ -20,6 +20,12 @@ from .target_generators import HeatmapGenerator
 from .target_generators import ScaleAwareHeatmapGenerator
 from .target_generators import JointsGenerator
 
+## 
+import os
+from os.path import join as opj
+from PIL import Image
+from torch.utils.data import Dataset
+import numpy as np
 
 def build_dataset(cfg, is_train):
     transforms = build_transforms(cfg, is_train)
@@ -106,3 +112,34 @@ def make_test_dataloader(cfg):
     )
 
     return data_loader, dataset
+
+class HIE_dataloader(Dataset):
+    def __init__(self,data_path):
+        super(HIE_dataloader,self).__init__()
+        self.transform = None
+        self.data_path = data_path
+        self.image = []
+        self.get_images()
+
+    
+    def get_images(self):
+        folders = os.listdir(self.data_path)
+        for folder in folders:
+            folder_path = opj(self.data_path,folder)
+            images = os.listdir(folder_path)
+            for image in images:
+                pic_path = opj(self.data_path,folder,image)
+                self.image.append(pic_path)
+
+    def __getitem__(self, index):
+        
+        dataset = np.array(Image.open(self.image[index]))
+
+        return dataset
+
+    def __len__(self):
+
+        return len(self.image)
+    
+
+

@@ -33,6 +33,7 @@ from core.inference import get_multi_stage_outputs
 from core.inference import aggregate_results
 from core.group import HeatmapParser
 from dataset import make_test_dataloader
+from dataset.HIEDataset import HIEDataset
 from fp16_utils.fp16util import network_to_half
 from utils.utils import create_logger
 from utils.utils import get_model_summary
@@ -44,6 +45,7 @@ from utils.transforms import get_multi_scale_size
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
+DATA_PATH='data/HIE20/train'
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Test keypoints network')
@@ -126,7 +128,8 @@ def main():
     model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
     model.eval()
 
-    data_loader, test_dataset = make_test_dataloader(cfg)
+    test_dataset = HIEDataset(DATA_PATH)
+    data_loader = torch.utils.data.DataLoader(test_dataset,batch_size=1,shuffle=False,num_workers=0,pin_memory=False)
 
     if cfg.MODEL.NAME == 'pose_hourglass':
         transforms = torchvision.transforms.Compose(
@@ -150,14 +153,18 @@ def main():
     all_scores = []
 
     pbar = tqdm(total=len(test_dataset)) if cfg.TEST.LOG_PROGRESS else None
-    for i, (images, annos) in enumerate(data_loader):
+    for i, images in enumerate(data_loader):
+    # for i, (images, annos) in enumerate(data_loader):
         assert 1 == images.size(0), 'Test batch size should be 1'
 
         image = images[0].cpu().numpy()
         # size at scale 1.0
+        if(i%100==0):
+            print("Start process images %d"%i)
         base_size, center, scale = get_multi_scale_size(
             image, cfg.DATASET.INPUT_SIZE, 1.0, min(cfg.TEST.SCALE_FACTOR)
         )
+        # print("Multi-scale end")
 
         with torch.no_grad():
             final_heatmaps = None
@@ -196,7 +203,8 @@ def main():
         if i % cfg.PRINT_FREQ == 0:
             prefix = '{}_{}'.format(os.path.join(final_output_dir, 'result_valid'), i)
             # logger.info('=> write {}'.format(prefix))
-            save_valid_image(image, final_results, '{}.jpg'.format(prefix), dataset=test_dataset.name)
+            # save_valid_image(image, final_results, '{}.jpg'.format(prefix),         dataset=test_dataset.name)
+            # save_valid_image(image, final_results, '{}.jpg'.format(prefix),dataset='HIE20')
             # save_debug_images(cfg, image_resized, None, None, outputs, prefix)
 
         all_preds.append(final_results)

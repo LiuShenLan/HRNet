@@ -1,7 +1,8 @@
 # ------------------------------------------------------------------------------
 # Copyright (c) Microsoft
 # Licensed under the MIT License.
-# Written by Bowen Cheng (bcheng9@illinois.edu) and Bin Xiao (leoxiaobin@gmail.com)
+# Written by Bin Xiao (leoxiaobin@gmail.com)
+# Modified by Bowen Cheng (bcheng9@illinois.edu)
 # ------------------------------------------------------------------------------
 
 from __future__ import absolute_import
@@ -19,14 +20,14 @@ import json_tricks as json
 import numpy as np
 from torch.utils.data import Dataset
 
-from crowdposetools.cocoeval import COCOeval
+from pycocotools.cocoeval import COCOeval
 from utils import zipreader
 
 logger = logging.getLogger(__name__)
 
 
-class CrowdPoseDataset(Dataset):
-    """`CrowdPose`_ Dataset.
+class CocoDataset(Dataset):
+    """`MS Coco Detection <http://mscoco.org/dataset/#detections-challenge2016>`_ Dataset.
 
     Args:
         root (string): Root directory where dataset is located to.
@@ -40,8 +41,8 @@ class CrowdPoseDataset(Dataset):
 
     def __init__(self, root, dataset, data_format, transform=None,
                  target_transform=None):
-        from crowdposetools.coco import COCO
-        self.name = 'CROWDPOSE'
+        from pycocotools.coco import COCO
+        self.name = 'COCO'
         self.root = root
         self.dataset = dataset
         self.data_format = data_format
@@ -65,21 +66,32 @@ class CrowdPoseDataset(Dataset):
         )
 
     def _get_anno_file_name(self):
-        # example: root/json/crowdpose_{train,val,test}.json
-        return os.path.join(
-            self.root,
-            'json',
-            'crowdpose_{}.json'.format(
-                self.dataset
+        # example: root/annotations/person_keypoints_tran2017.json
+        # image_info_test-dev2017.json
+        if 'test' in self.dataset:
+            return os.path.join(
+                self.root,
+                'annotations',
+                'image_info_{}.json'.format(
+                    self.dataset
+                )
             )
-        )
+        else:
+            return os.path.join(
+                self.root,
+                'annotations',
+                'person_keypoints_{}.json'.format(
+                    self.dataset
+                )
+            )
 
     def _get_image_path(self, file_name):
         images_dir = os.path.join(self.root, 'images')
+        dataset = 'test2017' if 'test' in self.dataset else self.dataset
         if self.data_format == 'zip':
-            return images_dir + '.zip@' + file_name
+            return os.path.join(images_dir, dataset) + '.zip@' + file_name
         else:
-            return os.path.join(images_dir, file_name)
+            return os.path.join(images_dir, dataset, file_name)
 
     def __getitem__(self, index):
         """
@@ -174,12 +186,12 @@ class CrowdPoseDataset(Dataset):
                 if cfg.DATASET.WITH_CENTER and not cfg.TEST.IGNORE_CENTER:
                     kpt = kpt[:-1]
 
-                kpts[int(file_name.split('.')[0])].append(
+                kpts[int(file_name[-16:-4])].append(
                     {
                         'keypoints': kpt[:, 0:3],
                         'score': scores[idx][idx_kpt],
                         'tags': kpt[:, 3],
-                        'image': int(file_name.split('.')[0]),
+                        'image': int(file_name[-16:-4]),
                         'area': area
                     }
                 )
@@ -202,12 +214,14 @@ class CrowdPoseDataset(Dataset):
             oks_nmsed_kpts, res_file
         )
 
-        # CrowdPose `test` set has annotation.
-        info_str = self._do_python_keypoint_eval(
-            res_file, res_folder
-        )
-        name_value = OrderedDict(info_str)
-        return name_value, name_value['AP']
+        if 'test' not in self.dataset:
+            info_str = self._do_python_keypoint_eval(
+                res_file, res_folder
+            )
+            name_value = OrderedDict(info_str)
+            return name_value, name_value['AP']
+        else:
+            return {'Null': 0}, 0
 
     def _write_coco_keypoint_results(self, keypoints, res_file):
         data_pack = [
@@ -241,7 +255,7 @@ class CrowdPoseDataset(Dataset):
         cat_id = data_pack['cat_id']
         keypoints = data_pack['keypoints']
         cat_results = []
-        num_joints = 14
+        num_joints = 17
 
         for img_kpts in keypoints:
             if len(img_kpts) == 0:
@@ -285,12 +299,11 @@ class CrowdPoseDataset(Dataset):
         coco_eval.evaluate()
         coco_eval.accumulate()
         coco_eval.summarize()
-        stats_names = ['AP', 'Ap .5', 'AP .75', 'AR', 'AR .5', 'AR .75', 'AP (easy)', 'AP (medium)', 'AP (hard)']
-        stats_index = [0, 1, 2, 5, 6, 7, 8, 9, 10]
+        stats_names = ['AP', 'Ap .5', 'AP .75', 'AP (M)', 'AP (L)', 'AR', 'AR .5', 'AR .75', 'AR (M)', 'AR (L)']
 
         info_str = []
         for ind, name in enumerate(stats_names):
-            info_str.append((name, coco_eval.stats[stats_index[ind]]))
+            info_str.append((name, coco_eval.stats[ind]))
             # info_str.append(coco_eval.stats[ind])
 
         return info_str
