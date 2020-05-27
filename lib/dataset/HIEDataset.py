@@ -76,11 +76,16 @@ class HIEDataset(Dataset):
 
             for per_person in per_annolist['annorect']:
                 
-                key_points = []
+                # key_points = []
+                key_points = np.zeros((14,2),dtype=float)
                 annopoints = per_person['annopoints'][0]['point']
                 for per_joint in annopoints:
-                    per_point = [per_joint['x'][0],per_joint['y'][0]]
-                    key_points.append(per_point)
+                    ids = per_joint['id'][0]
+                    # per_point = [per_joint['x'][0],per_joint['y'][0]]
+                    # key_points.append(per_point)
+                    key_points[ids,0] = per_joint['x'][0]
+                    key_points[ids,1] = per_joint['y'][0]
+                key_points = key_points.tolist()
 
                 bbox = [per_person['x1'][0],per_person['y1'][0],
                         per_person['x2'][0],per_person['y2'][0]]
@@ -189,12 +194,14 @@ class HIEDataset(Dataset):
 
         p = self.params
         # dimention here should be Nxm
-        gts = gts 
-        dts = pred
-        # inds = np.argsort([-d['score'] for d in dts], kind='mergesort')
+        gts_all = gts 
+        dts_all = pred
+        gts = gts_all[image_name]
+        dts = dts_all[image_name]
+        inds = np.argsort([-d['score'] for d in dts], kind='mergesort')
         # dts = [dts[i] for i in inds]
-        # if len(dts) > p.maxDets[-1]:
-        #     dts = dts[0:p.maxDets[-1]]
+        if len(dts) > p.maxDets[-1]:
+            dts = dts[0:p.maxDets[-1]]
         # if len(gts) == 0 and len(dts) == 0:
         if len(gts) == 0 or len(dts) == 0:
             return []
@@ -204,52 +211,121 @@ class HIEDataset(Dataset):
         k = len(sigmas)
         # compute oks between each detection and ground truth object
         
-        gt = gts[image_name]
-        dt = dts[image_name]
-        # create bounds for ignore regions(double the gt bbox)
-        for i in range(len(gt)):
+        for i, gt in enumerate(gts):
+            # create bounds for ignore regions(double the gt bbox)
             # i is the index of person
-            g = np.array(gt[i]['keypoints'])
-            print(g.shape)
+            g = np.array(gt['keypoints'])
+            print('g',g.shape)
             xg = g[:,0]; yg = g[:,1]
-            print(xg.shape)
-            print(yg.shape)
+            print('xg',xg.shape)
+            print('yg',yg.shape)
             k1 = 14     # visible joint_num
-            bb = gt[i]['bbox']
+            bb = gt['bbox']
             x0 = bb[0]; x1 = bb[0] + (bb[2]-bb[0]) * 2
             y0 = bb[1]; y1 = bb[1] + (bb[3]-bb[1]) * 2
-            print('bbox:')
-            print(x0,y0,x1,y1)
+            print('bbox:',x0,y0,x1,y1)
 
-            d = np.array(dt[i]['keypoints'])
-            xd = d[:,0]; yd = d[:,1]
-            xd = self.process_dt(xd)
-            yd = self.process_dt(yd)
-            print('d:')
-            print(d.shape)
-            print(xd.shape)
-            print(yd.shape)
-            tag = dt[i]['tags']
-            print('tag:')
-            print(tag)
-            print('####################')
-            if k1>0:
+            for j,dt in enumerate(dts):
+                d = np.array(dt['keypoints'])
+                xd = d[:,0]; yd = d[:,1]
+                xd = self.process_dt(xd)
+                yd = self.process_dt(yd)
+                print('d:',d.shape)
+                tag = dt['tags']
+
+                if k1>0:
                 # measure the per-keypoint distance if keypoints visible
-                dx = xd - xg
-                dy = yd - yg
-            else:
-                # measure minimum distance to keypoints in (x0,y0) & (x1,y1)
-                z = np.zeros((k))
-                dx = np.max((z, x0-xd),axis=0)+np.max((z, xd-x1),axis=0)
-                dy = np.max((z, y0-yd),axis=0)+np.max((z, yd-y1),axis=0)
-            e = (dx**2 + dy**2) / vars / (dt[i]['area']+np.spacing(1)) / 2
-            # gt['area'] => dt['area] as test
-            # if k1 > 0:
-            #     e=e[vg > 0]
-            ious = np.sum(np.exp(-e)) / e.shape[0]
+                    dx = xd - xg
+                    dy = yd - yg
+                else:
+                    # measure minimum distance to keypoints in (x0,y0) & (x1,y1)
+                    z = np.zeros((k))
+                    dx = np.max((z, x0-xd),axis=0)+np.max((z, xd-x1),axis=0)
+                    dy = np.max((z, y0-yd),axis=0)+np.max((z, yd-y1),axis=0)
+                e = (dx**2 + dy**2) / vars / (dt['area']+np.spacing(1)) / 2
+                # gt['area'] => dt['area] as test
+                # if k1 > 0:
+                #     e=e[vg > 0]
+                ious[j,i] = np.sum(np.exp(-e)) / e.shape[0]
             print(ious)
         return ious
 
+    def save_json(self,preds,scores):
+
+        kpts = defaultdict(list)
+        for idx, _kpts in enumerate(preds):
+            file_name = self.file_name[idx]
+            for idx_kpt, kpt in enumerate(_kpts):
+                area = (np.max(kpt[:, 0]) - np.min(kpt[:, 0])) * (np.max(kpt[:, 1]) - np.min(kpt[:, 1]))
+                kpt = self.processKeypoints(kpt)
+                # if self.with_center: False
+
+                # 000000.jpg [-10:-4]
+                # kpts[int(file_name[-10:-4])].append(
+                kpts[file_name].append(
+                    {
+                        'keypoints': kpt[:, 0:3],
+                        'score': scores[idx][idx_kpt],
+                        'tags': kpt[:, 3],
+                        'image': int(file_name[-10:-4]),
+                        'area': area
+                    }
+                )
+        
+        # construct json dict
+        annolist_list = []
+        for image_name in kpts.keys():
+            
+            # annolist_dict = defaultdict(list)
+            # image_name_dict = defaultdict(list)
+            annolist_dict = {}
+            image_name_dict = {}
+            image_name_dict['name'] = image_name
+            annorect_list = []
+
+            for idx,per_person in enumerate(kpts[image_name]):
+
+                # annorect_dict = defaultdict(list)
+                annorect_dict = {}
+                annorect_dict['x1'] = [np.min(per_person['keypoints'][:,0])]
+                annorect_dict['y1'] = [np.min(per_person['keypoints'][:,1])]
+                annorect_dict['x2'] = [np.max(per_person['keypoints'][:,0])]
+                annorect_dict['y2'] = [np.max(per_person['keypoints'][:,1])]
+                annorect_dict['track_id'] = [idx]
+                # construct point dict
+                # 17 point
+                point_list = []
+                for i in range(17):
+                    # per_point_dict = defaultdict(list)
+                    per_point_dict = {}
+                    per_point_dict['id'] = [i]
+                    per_point_dict['x'] = [per_person['keypoints'][i,0]]
+                    per_point_dict['y'] = [per_person['keypoints'][i,1]]
+                    per_point_dict['score'] = [per_person['score']]
+                    point_list.append(per_point_dict)
+                # point_dict = defaultdict(list)
+                point_dict = {}
+                point_dict['point'] = point_list
+
+                annorect_dict['annopoints'] = [point_dict]
+
+                annorect_list.append(annorect_dict)
+
+                annolist_dict['image'] = [image_name_dict]
+                annolist_dict['ignore_regions'] = []
+                annolist_dict['annorect'] = [annorect_dict]
+
+            annolist_list.append(annolist_dict)
+        
+        # all_annolist_dict = defaultdict(list)
+        all_annolist_dict = {}
+        all_annolist_dict['annolist'] = annolist_list
+        # write json file
+        jsondata = json.dumps(str(all_annolist_dict),indent=4,separators=(',', ': '))
+        f = open('11_result.json', 'w')
+        f.write(jsondata)
+        f.close()
+ 
 class Params:
     '''
     Params for coco evaluation api
@@ -271,7 +347,7 @@ class Params:
         # np.arange causes trouble.  the data point on arange is slightly larger than the true value
         self.iouThrs = np.linspace(.5, 0.95, int(np.round((0.95 - .5) / .05)) + 1, endpoint=True)
         self.recThrs = np.linspace(.0, 1.00, int(np.round((1.00 - .0) / .01)) + 1, endpoint=True)
-        self.maxDets = [20]
+        self.maxDets = [50]
         self.areaRng = [[0 ** 2, 1e5 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e5 ** 2]]
         self.areaRngLbl = ['all', 'medium', 'large']
         self.useCats = 1

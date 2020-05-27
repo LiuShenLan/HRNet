@@ -212,6 +212,9 @@ def main():
 
     if cfg.TEST.LOG_PROGRESS:
         pbar.close()
+    
+    # save preds and scores as json
+    test_dataset.save_json(all_preds,all_scores)
 
     name_values, _ = test_dataset.evaluate(
         cfg, all_preds, all_scores, final_output_dir
