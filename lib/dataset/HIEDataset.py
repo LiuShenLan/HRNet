@@ -311,9 +311,9 @@ class HIEDataset(Dataset):
 
                 annorect_list.append(annorect_dict)
 
-                annolist_dict['image'] = [image_name_dict]
-                annolist_dict['ignore_regions'] = []
-                annolist_dict['annorect'] = [annorect_dict]
+            annolist_dict['image'] = [image_name_dict]
+            annolist_dict['ignore_regions'] = []
+            annolist_dict['annorect'] = annorect_list
 
             annolist_list.append(annolist_dict)
         
@@ -321,7 +321,8 @@ class HIEDataset(Dataset):
         all_annolist_dict = {}
         all_annolist_dict['annolist'] = annolist_list
         # write json file
-        jsondata = json.dumps(str(all_annolist_dict),indent=4,separators=(',', ': '))
+        # jsondata = json.dumps(all_annolist_dict,indent=4,separators=(',', ': '),cls=MyEncoder)
+        jsondata = json.dumps(all_annolist_dict,cls=MyEncoder)
         f = open('11_result.json', 'w')
         f.write(jsondata)
         f.close()
@@ -363,3 +364,14 @@ class Params:
         self.iouType = iouType
         # useSegm is deprecated
         self.useSegm = None
+
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(MyEncoder, self).default(obj)
