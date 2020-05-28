@@ -20,4 +20,4 @@ conda activate hrnet
 
 export PYTHONPATH=~/anaconda3/envs/hrnet/lib/python3.6/site-packages/
 
-nohup CUDA_VISIBLE_DEVICES=0,1 python tools/dist_train.py --cfg experiments/coco/higher_hrnet/w32_512_adam_lr1e-3.yaml  > print.log 2>&1
+nohup python tools/dist_train.py --cfg experiments/coco/higher_hrnet/w32_512_adam_lr1e-3.yaml   > print.log 2>&1
