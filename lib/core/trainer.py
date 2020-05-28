@@ -12,7 +12,7 @@ from __future__ import print_function
 import logging
 import os
 import time
-import ipdb
+# import ipdb
 
 from utils.utils import AverageMeter
 from utils.vis import save_debug_images

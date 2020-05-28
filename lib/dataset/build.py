@@ -19,6 +19,7 @@ from .transforms import build_transforms
 from .target_generators import HeatmapGenerator
 from .target_generators import ScaleAwareHeatmapGenerator
 from .target_generators import JointsGenerator
+from dataset.HIEDataset import HIEDataset
 
 ## 
 import os
@@ -72,7 +73,8 @@ def make_dataloader(cfg, is_train=True, distributed=False):
         shuffle = False
     images_per_batch = images_per_gpu * len(cfg.GPUS)
 
-    dataset = build_dataset(cfg, is_train)
+    # dataset = build_dataset(cfg, is_train)
+    dataset = HIEDataset('data/HIE20/train')
 
     if is_train and distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(

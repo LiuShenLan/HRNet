@@ -57,6 +57,8 @@ def build_transforms(cfg, is_train=True):
         dataset_name = 'COCO'
     elif 'crowd_pose' in cfg.DATASET.DATASET:
         dataset_name = 'CROWDPOSE'
+    elif 'hie' in cfg.DATASET.DATASET:
+        dataset_name = 'hie'
     else:
         raise ValueError('Please implement flip_index for new dataset: %s.' % cfg.DATASET.DATASET)
     if cfg.DATASET.WITH_CENTER:
