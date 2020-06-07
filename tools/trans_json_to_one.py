@@ -23,7 +23,10 @@ for i_dir, json_file in enumerate(json_load):
     print("Load ", len(data['annolist']), "annolist")
 
     for i in range(len(data['annolist'])):
-        img_name = str(i_dir) + '_' + data['annolist'][i]["image"][0]["name"]
+        if i_dir < 10:
+            img_name = "0" + str(i_dir) + '_' + data['annolist'][i]["image"][0]["name"]
+        else:
+            img_name = str(i_dir) + '_' + data['annolist'][i]["image"][0]["name"]
         data['annolist'][i]["image"][0]["name"] = img_name
         data_save["annolist"].append(data['annolist'][i])
     
