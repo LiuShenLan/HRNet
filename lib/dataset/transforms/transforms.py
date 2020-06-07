@@ -63,7 +63,6 @@ class RandomHorizontalFlip(object):
         assert isinstance(joints, list)
         assert len(mask) == len(joints)
         assert len(mask) == len(self.output_size)
-
         if random.random() < self.prob:
             image = image[:, ::-1] - np.zeros_like(image)
             for i, _output_size in enumerate(self.output_size):

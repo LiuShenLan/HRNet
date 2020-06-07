@@ -30,9 +30,12 @@ class HeatmapLoss(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(self, pred, gt, mask):
+    def forward(self, pred, gt):
+        # print('THE PRED SIZE: ',pred.size())
+        # print('THE GT SIZE',gt.size())
         assert pred.size() == gt.size()
-        loss = ((pred - gt)**2) * mask[:, None, :, :].expand_as(pred)
+        # loss = ((pred - gt)**2) * mask[:, None, :, :].expand_as(pred)
+        loss = ((pred - gt)**2)
         loss = loss.mean(dim=3).mean(dim=2).mean(dim=1)
         # loss = loss.mean(dim=3).mean(dim=2).sum(dim=1)
         return loss
@@ -151,7 +154,7 @@ class LossFactory(nn.Module):
         if not self.heatmaps_loss and not self.ae_loss:
             logger.error('At least enable one loss!')
 
-    def forward(self, outputs, heatmaps, masks, joints):
+    def forward(self, outputs, heatmaps, joints):
         # TODO(bowen): outputs and heatmaps can be lists of same length
         heatmaps_pred = outputs[:, :self.num_joints]
         tags_pred = outputs[:, self.num_joints:]
@@ -161,7 +164,7 @@ class LossFactory(nn.Module):
         pull_loss = None
 
         if self.heatmaps_loss is not None:
-            heatmaps_loss = self.heatmaps_loss(heatmaps_pred, heatmaps, masks)
+            heatmaps_loss = self.heatmaps_loss(heatmaps_pred, heatmaps)
             heatmaps_loss = heatmaps_loss * self.heatmaps_loss_factor
 
         if self.ae_loss is not None:
@@ -204,9 +207,9 @@ class MultiLossFactory(nn.Module):
         self.push_loss_factor = cfg.LOSS.PUSH_LOSS_FACTOR
         self.pull_loss_factor = cfg.LOSS.PULL_LOSS_FACTOR
 
-    def forward(self, outputs, heatmaps, masks, joints):
+    def forward(self, outputs, heatmaps, joints):
         # forward check
-        self._forward_check(outputs, heatmaps, masks, joints)
+        self._forward_check(outputs, heatmaps, joints)
 
         heatmaps_losses = []
         push_losses = []
@@ -218,8 +221,9 @@ class MultiLossFactory(nn.Module):
                 offset_feat = self.num_joints
 
                 heatmaps_loss = self.heatmaps_loss[idx](
-                    heatmaps_pred, heatmaps[idx], masks[idx]
+                    heatmaps_pred, heatmaps[idx]
                 )
+                # change heatmap_loss_factor index
                 heatmaps_loss = heatmaps_loss * self.heatmaps_loss_factor[idx]
                 heatmaps_losses.append(heatmaps_loss)
             else:
@@ -271,21 +275,21 @@ class MultiLossFactory(nn.Module):
             'LOSS.WITH_AE_LOSS and LOSS.PULL_LOSS_FACTOR should have same length, got {} vs {}.'. \
                 format(len(cfg.LOSS.WITH_AE_LOSS), len(cfg.LOSS.PULL_LOSS_FACTOR))
 
-    def _forward_check(self, outputs, heatmaps, masks, joints):
+    def _forward_check(self, outputs, heatmaps, joints):
         assert isinstance(outputs, list), \
             'outputs should be a list, got {} instead.'.format(type(outputs))
         assert isinstance(heatmaps, list), \
             'heatmaps should be a list, got {} instead.'.format(type(heatmaps))
-        assert isinstance(masks, list), \
-            'masks should be a list, got {} instead.'.format(type(masks))
+        # assert isinstance(masks, list), \
+        #     'masks should be a list, got {} instead.'.format(type(masks))
         assert isinstance(joints, list), \
             'joints should be a list, got {} instead.'.format(type(joints))
         assert len(outputs) == self.num_stages, \
             'len(outputs) and num_stages should been same, got {} vs {}.'.format(len(outputs), self.num_stages)
         assert len(outputs) == len(heatmaps), \
             'outputs and heatmaps should have same length, got {} vs {}.'.format(len(outputs), len(heatmaps))
-        assert len(outputs) == len(masks), \
-            'outputs and masks should have same length, got {} vs {}.'.format(len(outputs), len(masks))
+        # assert len(outputs) == len(masks), \
+        #     'outputs and masks should have same length, got {} vs {}.'.format(len(outputs), len(masks))
         assert len(outputs) == len(joints), \
             'outputs and joints should have same length, got {} vs {}.'.format(len(outputs), len(joints))
         assert len(outputs) == len(self.heatmaps_loss), \

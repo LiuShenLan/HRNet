@@ -12,7 +12,6 @@ from __future__ import print_function
 import logging
 import os
 import time
-# import ipdb
 
 from utils.utils import AverageMeter
 from utils.vis import save_debug_images
@@ -24,20 +23,17 @@ def do_train(cfg, model, data_loader, loss_factory, optimizer, epoch,
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
-
+    # LOSS.NUM_STAGES = 1
     heatmaps_loss_meter = [AverageMeter() for _ in range(cfg.LOSS.NUM_STAGES)]
     push_loss_meter = [AverageMeter() for _ in range(cfg.LOSS.NUM_STAGES)]
     pull_loss_meter = [AverageMeter() for _ in range(cfg.LOSS.NUM_STAGES)]
 
-    # print(heatmaps_loss_meter)
-    # print(push_loss_meter)
-    # print(pull_loss_meter)
-    # import ipdb; ipdb.set_trace()
     # switch to train mode
     model.train()
 
     end = time.time()
-    for i, (images, heatmaps, masks, joints) in enumerate(data_loader):
+    # for i, (images, heatmaps, masks, joints) in enumerate(data_loader):
+    for i, (images, heatmaps, joints) in enumerate(data_loader):
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -45,14 +41,16 @@ def do_train(cfg, model, data_loader, loss_factory, optimizer, epoch,
         outputs = model(images)
 
         heatmaps = list(map(lambda x: x.cuda(non_blocking=True), heatmaps))
-        masks = list(map(lambda x: x.cuda(non_blocking=True), masks))
+        # masks = list(map(lambda x: x.cuda(non_blocking=True), masks))
         joints = list(map(lambda x: x.cuda(non_blocking=True), joints))
 
         # loss = loss_factory(outputs, heatmaps, masks)
         heatmaps_losses, push_losses, pull_losses = \
-            loss_factory(outputs, heatmaps, masks, joints)
+            loss_factory(outputs, heatmaps, joints)
+            # loss_factory(outputs, heatmaps, masks, joints)
 
         loss = 0
+        # LOSS.NUM_STAGES = 1
         for idx in range(cfg.LOSS.NUM_STAGES):
             if heatmaps_losses[idx] is not None:
                 heatmaps_loss = heatmaps_losses[idx].mean(dim=0)
@@ -127,7 +125,7 @@ def do_train(cfg, model, data_loader, loss_factory, optimizer, epoch,
                     cfg.DATASET.OUTPUT_SIZE[scale_idx]
                 )
                 save_debug_images(
-                    cfg, images, heatmaps[scale_idx], masks[scale_idx],
+                    cfg, images, heatmaps[scale_idx], None,
                     outputs[scale_idx], prefix_scale
                 )
 

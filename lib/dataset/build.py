@@ -19,28 +19,32 @@ from .transforms import build_transforms
 from .target_generators import HeatmapGenerator
 from .target_generators import ScaleAwareHeatmapGenerator
 from .target_generators import JointsGenerator
-from dataset.HIEDataset import HIEDataset
-
+from .HIEKeypoints import HIEKeypoints as hie_kpt
 ## 
 import os
 from os.path import join as opj
 from PIL import Image
-from torch.utils.data import Dataset
 import numpy as np
+
+from torch.utils.data import Dataset
 
 def build_dataset(cfg, is_train):
     transforms = build_transforms(cfg, is_train)
 
     if cfg.DATASET.SCALE_AWARE_SIGMA:
+        # _C.DATASET.SCALE_AWARE_SIGMA = False
         _HeatmapGenerator = ScaleAwareHeatmapGenerator
     else:
         _HeatmapGenerator = HeatmapGenerator
 
     heatmap_generator = [
         _HeatmapGenerator(
-            output_size, cfg.DATASET.NUM_JOINTS, cfg.DATASET.SIGMA
+            output_size, 
+            cfg.DATASET.NUM_JOINTS,
+            cfg.DATASET.SIGMA
         ) for output_size in cfg.DATASET.OUTPUT_SIZE
-    ]
+    ]       # DATASET.SIGMA = -1, DATASET.NUM_JOINTS = 17
+            # DATASET.OUTPUT_SIZE = [128, 256, 512]
     joints_generator = [
         JointsGenerator(
             cfg.DATASET.MAX_NUM_PEOPLE,
@@ -49,10 +53,14 @@ def build_dataset(cfg, is_train):
             cfg.MODEL.TAG_PER_JOINT
         ) for output_size in cfg.DATASET.OUTPUT_SIZE
     ]
-
-    dataset_name = cfg.DATASET.TRAIN if is_train else cfg.DATASET.TEST
-
-    dataset = eval(cfg.DATASET.DATASET)(
+            # DATASET.MAX_NUM_PEOPLE = 30
+            # DATASET.NUM_JOINTS = 17
+            # MODEL.TAG_PER_JOINT = True
+    # dataset_name = cfg.DATASET.TRAIN if is_train else cfg.DATASET.TEST
+            # DATASET.TRAIN = 'train2017'
+    dataset_name = 'train'
+    # DATASET.DATASET = 'coco_kpt'
+    dataset = eval('hie_kpt')(
         cfg,
         dataset_name,
         is_train,
@@ -60,21 +68,23 @@ def build_dataset(cfg, is_train):
         joints_generator,
         transforms
     )
-
+    # eval('coco_kpt') => CocoKeypoints
+    # (self,cfg,dataset_name,remove_images_without_annotations,
+    # heatmap_generator,joints_generator,transforms=None)
     return dataset
 
 
 def make_dataloader(cfg, is_train=True, distributed=False):
     if is_train:
         images_per_gpu = cfg.TRAIN.IMAGES_PER_GPU
+        # _C.TRAIN.IMAGES_PER_GPU = 32
         shuffle = True
     else:
         images_per_gpu = cfg.TEST.IMAGES_PER_GPU
         shuffle = False
     images_per_batch = images_per_gpu * len(cfg.GPUS)
 
-    # dataset = build_dataset(cfg, is_train)
-    dataset = HIEDataset('data/HIE20/train')
+    dataset = build_dataset(cfg, is_train) 
 
     if is_train and distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
@@ -119,10 +129,9 @@ class HIE_dataloader(Dataset):
     def __init__(self,data_path):
         super(HIE_dataloader,self).__init__()
         self.transform = None
-        self.data_path = data_path
+        self.data_path = data_path     
         self.image = []
         self.get_images()
-
     
     def get_images(self):
         folders = os.listdir(self.data_path)
@@ -137,7 +146,7 @@ class HIE_dataloader(Dataset):
         
         dataset = np.array(Image.open(self.image[index]))
 
-        return dataset
+        return dataset 
 
     def __len__(self):
 

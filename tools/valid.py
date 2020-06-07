@@ -142,8 +142,10 @@ def main():
             [
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225]
+                    # mean=[0.485, 0.456, 0.406],
+                    # std=[0.229, 0.224, 0.225]
+                    mean=[0.5, 0.5, 0.5],
+                    std=[0.5, 0.5, 0.5]
                 )
             ]
         )
@@ -215,16 +217,17 @@ def main():
     
     # save preds and scores as json
     test_dataset.save_json(all_preds,all_scores)
+    print('Save finished!')
 
-    name_values, _ = test_dataset.evaluate(
-        cfg, all_preds, all_scores, final_output_dir
-    )
+    # name_values, _ = test_dataset.evaluate(
+    #     cfg, all_preds, all_scores, final_output_dir
+    # )
 
-    if isinstance(name_values, list):
-        for name_value in name_values:
-            _print_name_value(logger, name_value, cfg.MODEL.NAME)
-    else:
-        _print_name_value(logger, name_values, cfg.MODEL.NAME)
+    # if isinstance(name_values, list):
+    #     for name_value in name_values:
+    #         _print_name_value(logger, name_value, cfg.MODEL.NAME)
+    # else:
+    #     _print_name_value(logger, name_values, cfg.MODEL.NAME)
 
 
 if __name__ == '__main__':

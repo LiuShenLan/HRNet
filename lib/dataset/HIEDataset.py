@@ -2,6 +2,7 @@ import os
 import os.path
 import numpy as np
 import json
+import copy
 
 from os.path import join as opj
 from torch.utils.data import Dataset
@@ -13,10 +14,12 @@ class HIEDataset(Dataset):
     def __init__(self,data_path):
         super(HIEDataset,self).__init__()
         self.root = 'data/HIE20/labels/train/track2&3'
-        self.json_name = '11.json'
+        self.json_name = '8.json'
         self.transform = None
         self.file_name = []
+        # file_name save pic_name as sequence
         self.image = []
+        # image save every pic_path
         self.data_path = data_path
         self.params = Params(iouType='keypoints')
         self.gt_keypoints = defaultdict(list)
@@ -29,8 +32,9 @@ class HIEDataset(Dataset):
         folders = os.listdir(self.data_path)
         for folder in folders:
             folder_path = opj(self.data_path,folder)
-            images = os.listdir(folder_path)
-            for image in images:
+            # images = os.listdir(folder_path)
+            # for image in images:
+            for image in self.file_name:
                 pic_path = opj(self.data_path,folder,image)
                 self.image.append(pic_path)
     
@@ -115,23 +119,29 @@ class HIEDataset(Dataset):
 
         kpts = defaultdict(list)
         for idx, _kpts in enumerate(preds):
+            if idx != 0 :
+                previous_file_name = self.file_name[idx-1]
             file_name = self.file_name[idx]
-            for idx_kpt, kpt in enumerate(_kpts):
-                area = (np.max(kpt[:, 0]) - np.min(kpt[:, 0])) * (np.max(kpt[:, 1]) - np.min(kpt[:, 1]))
-                kpt = self.processKeypoints(kpt)
-                # if self.with_center: False
+            # if no detection
+            if len(_kpts) == 0:
+                kpts[file_name] = copy.deepcopy(kpts[previous_file_name])
+            else:
+                for idx_kpt, kpt in enumerate(_kpts):
+                    area = (np.max(kpt[:, 0]) - np.min(kpt[:, 0])) * (np.max(kpt[:, 1]) - np.min(kpt[:, 1]))
+                    kpt = self.processKeypoints(kpt)
+                    # if self.with_center: False
 
-                # 000000.jpg [-10:-4]
-                # kpts[int(file_name[-10:-4])].append(
-                kpts[file_name].append(
-                    {
-                        'keypoints': kpt[:, 0:3],
-                        'score': scores[idx][idx_kpt],
-                        'tags': kpt[:, 3],
-                        'image': int(file_name[-10:-4]),
-                        'area': area
-                    }
-                )
+                    # 000000.jpg [-10:-4]
+                    # kpts[int(file_name[-10:-4])].append(
+                    kpts[file_name].append(
+                        {
+                            'keypoints': kpt[:, 0:3],
+                            'score': scores[idx][idx_kpt],
+                            'tags': kpt[:, 3],
+                            'image': int(file_name[-10:-4]),
+                            'area': area
+                        }
+                    )
         
         # rescoring and oks nms
         oks_nmsed_kpts = []
@@ -177,15 +187,20 @@ class HIEDataset(Dataset):
         return tmp
     
     def process_dt(self,xd):
+        # xd,yd process as same way
         # xd.shape (17,)
-        xd[0],xd[1],xd[2],xd[3],xd[4],xd[5],xd[6],
-        xd[7],xd[8],xd[9],xd[10],xd[11],xd[12],xd[13]=\
-        xd[0],xd[0],xd[5],xd[7],xd[9],xd[6],xd[8],
-        xd[10],xd[11],xd[13],xd[15],xd[12],xd[14],xd[16]
+        # the midpoint of r_shoulder,l_shoulder,r_hip,l_hip
+        xd_ = np.zeros(14,)
+        xd_chest = 0.5*(0.5*(xd[5]+xd[6])+0.5*(xd[11]+xd[12]))
+
+        xd_[0],xd_[1],xd_[2],xd_[3],xd_[4],xd_[5],xd_[6],\
+        xd_[7],xd_[8],xd_[9],xd_[10],xd_[11],xd_[12],xd_[13]=\
+        xd[0],xd_chest,xd[6],xd[8],xd[10],xd[5],xd[7],\
+        xd[9],xd[12],xd[14],xd[16],xd[11],xd[13],xd[15]
         
-        xd = xd[0:14]
-        # extract xd[0]-xd[13]
-        return xd
+        # xd = xd[0:14]
+        # extract xd[0]-xd[14]
+        return xd_
     
     def do_keypoint_eval(self, res_file, res_folder):
         pass
@@ -254,24 +269,47 @@ class HIEDataset(Dataset):
 
         kpts = defaultdict(list)
         for idx, _kpts in enumerate(preds):
+            # ignore the situation that first pic has no detection
+            if idx != 0:
+                previous_file_name = self.file_name[idx-1]
             file_name = self.file_name[idx]
-            for idx_kpt, kpt in enumerate(_kpts):
-                area = (np.max(kpt[:, 0]) - np.min(kpt[:, 0])) * (np.max(kpt[:, 1]) - np.min(kpt[:, 1]))
-                kpt = self.processKeypoints(kpt)
-                # if self.with_center: False
+            # if no detection
+            if len(_kpts) == 0:
+                kpts[file_name] = copy.deepcopy(kpts[previous_file_name])
+            else:
+                for idx_kpt, kpt in enumerate(_kpts):
+                    area = (np.max(kpt[:, 0]) - np.min(kpt[:, 0])) * (np.max(kpt[:, 1]) - np.min(kpt[:, 1]))
+                    kpt = self.processKeypoints(kpt)
+                    # if self.with_center: False
 
-                # 000000.jpg [-10:-4]
-                # kpts[int(file_name[-10:-4])].append(
-                kpts[file_name].append(
-                    {
-                        'keypoints': kpt[:, 0:3],
-                        'score': scores[idx][idx_kpt],
-                        'tags': kpt[:, 3],
-                        'image': int(file_name[-10:-4]),
-                        'area': area
-                    }
-                )
+                    # 000000.jpg [-10:-4]
+                    # kpts[int(file_name[-10:-4])].append(
+                    kpts[file_name].append(
+                        {
+                            'keypoints': kpt[:, 0:3],
+                            'score': scores[idx][idx_kpt],
+                            'tags': kpt[:, 3],
+                            'image': int(file_name[-10:-4]),
+                            'area': area
+                        }
+                    )
         
+        # transform the joints sequence
+        for image_name in kpts.keys():
+            dts = kpts[image_name]
+            for per_person in dts:
+                kpt = np.array(per_person['keypoints'])
+                # print(kpt.shape)
+                xd = kpt[:,0]; yd = kpt[:,1]
+                xd_ = self.process_dt(xd)
+                yd_ = self.process_dt(yd)
+                kpt = kpt[0:14]
+                kpt[:,0] = xd_
+                kpt[:,1] = yd_
+                # print(kpt.shape)
+                # kpt = kpt.tolist()
+                per_person['keypoints'] = kpt
+
         # construct json dict
         annolist_list = []
         for image_name in kpts.keys():
@@ -295,7 +333,7 @@ class HIEDataset(Dataset):
                 # construct point dict
                 # 17 point
                 point_list = []
-                for i in range(17):
+                for i in range(14):
                     # per_point_dict = defaultdict(list)
                     per_point_dict = {}
                     per_point_dict['id'] = [i]
@@ -323,7 +361,7 @@ class HIEDataset(Dataset):
         # write json file
         # jsondata = json.dumps(all_annolist_dict,indent=4,separators=(',', ': '),cls=MyEncoder)
         jsondata = json.dumps(all_annolist_dict,cls=MyEncoder)
-        f = open('11_result.json', 'w')
+        f = open('8_result.json', 'w')
         f.write(jsondata)
         f.close()
  
